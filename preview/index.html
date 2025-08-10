@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>楚天镜 · 智能风控系统 预览</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ECFEFF', 100: '#CFFAFE', 200: '#A5F3FC', 300: '#67E8F9',
+              400: '#22D3EE', 500: '#06B6D4', 600: '#0891B2', 700: '#0E7490',
+              800: '#155E75', 900: '#164E63'
+            }
+          },
+          boxShadow: {
+            glow: '0 0 20px rgba(34,211,238,.35)'
+          },
+          keyframes: {
+            shimmer: {
+              '0%': { backgroundPosition: '0% 50%' },
+              '100%': { backgroundPosition: '100% 50%' }
+            }
+          },
+          animation: {
+            shimmer: 'shimmer 2.5s linear infinite'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass {
+      backdrop-filter: blur(10px);
+      background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .gradient-border {
+      position: relative;
+    }
+    .gradient-border::before {
+      content: '';
+      position: absolute; inset: -1px;
+      background: linear-gradient(90deg, rgba(34,211,238,.6), rgba(139,92,246,.6));
+      filter: blur(8px); opacity: .35; border-radius: 14px; z-index: -1;
+    }
+  </style>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100">
+  <div id="app" class="flex min-h-screen">
+    <!-- 一级导航 -->
+    <aside class="w-64 border-r border-white/10 p-4 space-y-2 sticky top-0 h-screen overflow-y-auto">
+      <div class="flex items-center gap-2 mb-4">
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-violet-500"></div>
+        <div class="font-semibold">楚天镜 · 风控</div>
+      </div>
+      <nav class="space-y-1">
+        <template v-for="(item, idx) in navLevel1" :key="item.key">
+          <button
+            class="w-full text-left px-3 py-2 rounded-lg glass hover:shadow-glow transition relative"
+            :class="{ 'ring-1 ring-brand-400 shadow-glow': state.l1 === item.key }"
+            @click="switchL1(item.key)"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-sm">{{ item.label }}</span>
+              <span v-if="state.l1 === item.key" class="h-[2px] w-12 bg-gradient-to-r from-brand-400 to-violet-400 rounded-full"></span>
+            </div>
+          </button>
+        </template>
+      </nav>
+      <div class="mt-6 text-xs text-white/50">预览版 · 动效和数据为示意</div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="flex-1 p-6 space-y-4 overflow-x-hidden">
+      <!-- 面包屑 -->
+      <div class="text-sm text-white/60">{{ breadcrumb }}</div>
+
+      <!-- 二级/三级标签栏 -->
+      <section v-if="l1Config.tabs2 && l1Config.tabs2.length" class="space-y-3">
+        <div class="flex flex-wrap gap-2">
+          <template v-for="t in l1Config.tabs2" :key="t.key">
+            <button class="px-3 py-1.5 rounded-lg glass hover:shadow-glow transition"
+              :class="{ 'bg-brand-500/20 ring-1 ring-brand-400': state.l2 === t.key }"
+              @click="switchL2(t.key)">
+              {{ t.label }}
+            </button>
+          </template>
+        </div>
+
+        <div v-if="l2Config && l2Config.tabs3 && l2Config.tabs3.length" class="flex flex-wrap gap-2">
+          <template v-for="t in l2Config.tabs3" :key="t.key">
+            <button class="px-3 py-1.5 rounded-lg glass hover:shadow-glow transition"
+              :class="{ 'bg-violet-500/20 ring-1 ring-violet-400': state.l3 === t.key }"
+              @click="switchL3(t.key)">
+              {{ t.label }}
+            </button>
+          </template>
+        </div>
+      </section>
+
+      <!-- 四级页面 左侧菜单 + 右侧内容区 -->
+      <section class="grid grid-cols-12 gap-4">
+        <!-- 四级左侧菜单 -->
+        <aside class="col-span-3 xl:col-span-2 space-y-2">
+          <template v-for="m in l3Menu" :key="m.key">
+            <button class="w-full text-left px-3 py-2 rounded-lg glass hover:shadow-glow transition"
+              :class="{ 'ring-1 ring-brand-400 shadow-glow': state.l4 === m.key }"
+              @click="switchL4(m.key)">
+              {{ m.label }}
+            </button>
+          </template>
+        </aside>
+
+        <!-- 四级右侧内容区 -->
+        <div class="col-span-9 xl:col-span-10">
+          <!-- 过滤器区 -->
+          <div class="glass rounded-xl p-4 gradient-border mb-4">
+            <div class="grid grid-cols-12 gap-3">
+              <div class="col-span-12 md:col-span-3">
+                <label class="text-xs text-white/60">统计日期</label>
+                <input type="date" v-model="filters.statDate" class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2" />
+              </div>
+              <div class="col-span-12 md:col-span-3">
+                <label class="text-xs text-white/60">二级机构</label>
+                <select v-model="filters.org2" class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                  <option v-for="o in orgs2" :key="o.id" :value="o.id">{{ o.name }}</option>
+                </select>
+              </div>
+              <div class="col-span-12 md:col-span-3" v-if="showOrg3">
+                <label class="text-xs text-white/60">三级及以下机构</label>
+                <select v-model="filters.org3" class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                  <option v-for="o in orgs3" :key="o.id" :value="o.id">{{ o.name }}</option>
+                </select>
+              </div>
+              <div class="col-span-6 md:col-span-2">
+                <label class="text-xs text-white/60">对比时点</label>
+                <select v-model="filters.comparePoint" class="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                  <option value="d-1">较上日</option>
+                  <option value="m-1">较上月</option>
+                  <option value="y-1">较上年</option>
+                </select>
+              </div>
+              <div class="col-span-6 md:col-span-1 flex items-end gap-2">
+                <button class="w-full bg-brand-500/20 border border-brand-400 text-brand-100 px-3 py-2 rounded-lg hover:shadow-glow" @click="doQuery">查询</button>
+              </div>
+              <div class="col-span-6 md:col-span-1 flex items-end gap-2">
+                <button class="w-full bg-white/5 border border-white/10 text-white/80 px-3 py-2 rounded-lg hover:shadow-glow" @click="doReset">重置</button>
+              </div>
+            </div>
+
+            <!-- 二选一切换 -->
+            <div class="mt-3 flex gap-2">
+              <button class="px-3 py-1.5 rounded-lg glass" :class="{ 'ring-1 ring-brand-400': viewTab==='asset' }" @click="viewTab='asset'">资产质量</button>
+              <button class="px-3 py-1.5 rounded-lg glass" :class="{ 'ring-1 ring-brand-400': viewTab==='repay' }" @click="viewTab='repay'">还款情况</button>
+            </div>
+          </div>
+
+          <!-- 资产质量视图（Bento） -->
+          <div v-show="viewTab==='asset'" class="grid grid-cols-12 gap-4" ref="assetPanel">
+            <div class="col-span-12 xl:col-span-8 xl:row-span-2 glass rounded-xl p-4 gradient-border">
+              <div class="flex items-center justify-between mb-3">
+                <div class="font-semibold">不良率趋势（NPL Rate）</div>
+                <div class="text-xs text-white/60">{{ filters.statDate }} · 对比：{{ compareLabel }}</div>
+              </div>
+              <canvas id="nplChart" height="120"></canvas>
+            </div>
+
+            <div class="col-span-6 xl:col-span-4 glass rounded-xl p-4 gradient-border">
+              <div class="text-sm text-white/60">表内余额</div>
+              <div class="text-2xl font-bold mt-1">{{ fmtNum(kpis.onBalance) }}</div>
+              <div class="text-xs mt-1" :class="kpis.onBalanceDelta>=0?'text-rose-300':'text-emerald-300'">
+                环比 {{ kpis.onBalanceDelta>=0?'+':'' }}{{ fmtNum(kpis.onBalanceDelta) }}
+              </div>
+            </div>
+            <div class="col-span-6 xl:col-span-4 glass rounded-xl p-4 gradient-border">
+              <div class="text-sm text-white/60">不良率</div>
+              <div class="text-2xl font-bold mt-1">{{ (kpis.nplRate*100).toFixed(2) }}%</div>
+              <div class="text-xs mt-1" :class="kpis.nplRateDelta>=0?'text-rose-300':'text-emerald-300'">
+                环比 {{ kpis.nplRateDelta>=0?'+':'' }}{{ (kpis.nplRateDelta*100).toFixed(2) }}%
+              </div>
+            </div>
+            <div class="col-span-6 xl:col-span-4 glass rounded-xl p-4 gradient-border">
+              <div class="text-sm text-white/60">新发生不良率</div>
+              <div class="text-2xl font-bold mt-1">{{ (kpis.newNplRate*100).toFixed(2) }}%</div>
+              <div class="text-xs mt-1" :class="kpis.newNplRateDelta>=0?'text-rose-300':'text-emerald-300'">
+                环比 {{ kpis.newNplRateDelta>=0?'+':'' }}{{ (kpis.newNplRateDelta*100).toFixed(2) }}%
+              </div>
+            </div>
+
+            <div class="col-span-12 glass rounded-xl p-4 gradient-border">
+              <div class="font-semibold mb-2">机构指标切片</div>
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                  <thead class="text-white/60">
+                    <tr>
+                      <th class="text-left py-2">机构</th>
+                      <th class="text-right">表内余额</th>
+                      <th class="text-right">逾期余额</th>
+                      <th class="text-right">不良余额</th>
+                      <th class="text-right">不良率</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in orgSlice" :key="row.org" class="border-t border-white/5 hover:bg-white/5">
+                      <td class="py-2">{{ row.org }}</td>
+                      <td class="text-right">{{ fmtNum(row.onBalance) }}</td>
+                      <td class="text-right">{{ fmtNum(row.overdueBalance) }}</td>
+                      <td class="text-right">{{ fmtNum(row.nplBalance) }}</td>
+                      <td class="text-right">{{ (row.nplRate*100).toFixed(2) }}%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 还款情况视图 -->
+          <div v-show="viewTab==='repay'" class="glass rounded-xl p-4 gradient-border" ref="repayPanel">
+            <div class="font-semibold mb-2">逾期客户明细</div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm">
+                <thead class="text-white/60">
+                  <tr>
+                    <th class="text-left py-2">客户名称</th>
+                    <th class="text-right">贷款余额</th>
+                    <th class="text-right">逾期天数</th>
+                    <th class="text-right">逾期本金</th>
+                    <th class="text-right">逾期利息</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in overdueList" :key="row.name" class="border-t border-white/5 hover:bg-white/5">
+                    <td class="py-2">{{ row.name }}</td>
+                    <td class="text-right">{{ fmtNum(row.balance) }}</td>
+                    <td class="text-right">{{ row.days }}</td>
+                    <td class="text-right">{{ fmtNum(row.overduePrincipal) }}</td>
+                    <td class="text-right">{{ fmtNum(row.overdueInterest) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 非已实现页面的占位 -->
+          <div v-if="!isImplemented" class="glass rounded-xl p-8 text-center text-white/70">
+            <div class="text-lg">该页面为预览占位，更多内容敬请期待</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive, computed, onMounted, watch } = Vue
+
+    createApp({
+      setup() {
+        const navLevel1 = [
+          { key: 'asset', label: '全行资产质量信用风险预警' },
+          { key: 'region', label: '区域风险预警' },
+          { key: 'industry', label: '行业风险预警' },
+          { key: 'group', label: '集团风险预警' },
+          { key: 'market', label: '金融市场信用风险预警' },
+          { key: 'mix', label: '组合风险预警' },
+          { key: 'ai', label: '生成式风险报告' },
+          { key: 'advice', label: '意见建议词条' }
+        ]
+
+        const tabsMap = {
+          asset: {
+            tabs2: [
+              { key: 'corp', label: '公司信用风险' },
+              { key: 'retail', label: '零售信用风险' },
+              { key: 'summary', label: '全省汇总' }
+            ],
+            tabs3: {
+              corp: [
+                { key: 'large', label: '大公司预警' },
+                { key: 'sme', label: '对公普惠预警' }
+              ],
+              retail: [
+                { key: 'consfin', label: '消费金融预警' },
+                { key: 'inclusive', label: '对私普惠预警' },
+                { key: 'card', label: '银行卡预警' }
+              ],
+              summary: [ { key: 'province', label: '全省资产质量汇总' } ]
+            },
+            menu4: {
+              large: [
+                { key: 'org', label: '机构风险预警' },
+                { key: 'product', label: '产品风险预警' },
+                { key: 'industry', label: '行业风险预警' },
+                { key: 'manager', label: '人员资产质量预警' }
+              ],
+              sme: [
+                { key: 'org', label: '机构风险预警' },
+                { key: 'product', label: '产品风险预警' },
+                { key: 'manager', label: '人员资产质量预警' }
+              ],
+              consfin: [
+                { key: 'org', label: '机构风险预警' },
+                { key: 'product', label: '产品风险预警' },
+                { key: 'manager', label: '人员资产质量预警' }
+              ],
+              inclusive: [
+                { key: 'org', label: '机构风险预警' },
+                { key: 'product', label: '产品风险预警' },
+                { key: 'manager', label: '人员资产质量预警' }
+              ],
+              card: [
+                { key: 'org', label: '机构风险预警' },
+                { key: 'manager', label: '人员资产质量预警' }
+              ],
+              province: [ { key: 'summary', label: '省级汇总' } ]
+            }
+          },
+          region: {
+            tabs2: [ { key: 'economy', label: '区域经济风险预警' }, { key: 'policy', label: '区域政策风险' } ],
+            tabs3: { economy: [ { key: 'wuhan', label: '武汉市' }, { key: 'cities', label: '地市州' } ], policy: [ { key: 'board', label: '政策指标面板' } ] },
+            menu4: { wuhan: [ { key: 'dash', label: '仪表盘' } ], cities: [ { key: 'dash', label: '仪表盘' } ], board: [ { key: 'dash', label: '仪表盘' } ] }
+          },
+          industry: {
+            tabs2: [ { key: 'quant', label: '定量维度' }, { key: 'qual', label: '定性维度' } ],
+            tabs3: { quant: [ { key: 'prosperity', label: '行业景气度' }, { key: 'concentration', label: '授信集中度风险' }, { key: 'finance', label: '行业财务指标' } ],
+                     qual: [ { key: 'competition', label: '行业竞争格局' }, { key: 'macro', label: '宏观与政策环境' }, { key: 'other', label: '其他' } ] },
+            menu4: { prosperity: [ { key: 'dash', label: '仪表盘' } ], concentration: [ { key: 'dash', label: '仪表盘' } ], finance: [ { key: 'dash', label: '仪表盘' } ], competition: [ { key: 'dash', label: '仪表盘' } ], macro: [ { key: 'dash', label: '仪表盘' } ], other: [ { key: 'dash', label: '仪表盘' } ] }
+          },
+          group: {
+            tabs2: [ { key: 'credit', label: '授信集中度风险预警' }, { key: 'news', label: '舆情风险预警' }, { key: 'related', label: '关联交易风险预警' }, { key: 'other', label: '其他预警' } ],
+            tabs3: { credit: [ { key: 'board', label: '概览' } ], news: [ { key: 'board', label: '概览' } ], related: [ { key: 'board', label: '概览' } ], other: [ { key: 'board', label: '概览' } ] },
+            menu4: { board: [ { key: 'dash', label: '仪表盘' } ] }
+          },
+          market: {
+            tabs2: [ { key: 'bond', label: '债券投资风险预警' }, { key: 'derivative', label: '衍生品风险预警' }, { key: 'other', label: '其他' } ],
+            tabs3: { bond: [ { key: 'org', label: '机构风险预警' }, { key: 'product', label: '产品风险预警' } ],
+                     derivative: [ { key: 'ctpy', label: '交易对手信用恶化预警' }, { key: 'collateral', label: '抵押品风险' }, { key: 'threshold', label: '超阈值预警' }, { key: 'auto', label: '自动化告警' } ],
+                     other: [ { key: 'dash', label: '仪表盘' } ] },
+            menu4: { org: [ { key: 'dash', label: '仪表盘' } ], product: [ { key: 'dash', label: '仪表盘' } ], ctpy: [ { key: 'dash', label: '仪表盘' } ], collateral: [ { key: 'dash', label: '仪表盘' } ], threshold: [ { key: 'dash', label: '仪表盘' } ], auto: [ { key: 'dash', label: '仪表盘' } ], dash: [ { key: 'dash', label: '仪表盘' } ] }
+          },
+          mix: { tabs2: [ { key: 'builder', label: '组合查询' } ], tabs3: { builder: [ { key: 'panel', label: '条件面板' } ] }, menu4: { panel: [ { key: 'dash', label: '组合仪表盘' } ] } },
+          ai: { tabs2: [ { key: 'report', label: '生成式风险报告' } ], tabs3: { report: [ { key: 'panel', label: '报告面板' } ] }, menu4: { panel: [ { key: 'dash', label: '报告' } ] } },
+          advice: { tabs2: [ { key: 'suggest', label: '意见与建议' } ], tabs3: { suggest: [ { key: 'panel', label: '意见表单' } ] }, menu4: { panel: [ { key: 'dash', label: '表单' } ] } }
+        }
+
+        const state = reactive({ l1: 'asset', l2: 'corp', l3: 'large', l4: 'org' })
+
+        const filters = reactive({
+          statDate: new Date().toISOString().slice(0,10),
+          org2: 'org-001', org3: 'org-001-01', comparePoint: 'm-1'
+        })
+
+        const orgs2 = [
+          { id: 'org-001', name: '省行营业部' },
+          { id: 'org-002', name: '武汉分行' },
+          { id: 'org-003', name: '宜昌分行' }
+        ]
+        const orgs3 = [
+          { id: 'org-001-01', name: '营业一部' },
+          { id: 'org-001-02', name: '营业二部' }
+        ]
+        const showOrg3 = computed(() => true)
+
+        const l1Config = computed(() => tabsMap[state.l1] || { tabs2: [] })
+        const l2Config = computed(() => (l1Config.value.tabs3 || {})[state.l2] ? { tabs3: (l1Config.value.tabs3 || {})[state.l2] } : null)
+        const l3Menu = computed(() => (l1Config.value.menu4 || {})[state.l3] || [])
+        const isImplemented = computed(() => state.l1 === 'asset' && ((state.l2==='corp' && state.l3==='large') || (state.l2==='corp' && state.l3==='sme') || (state.l2==='retail' && ['consfin','inclusive','card'].includes(state.l3))) )
+
+        const breadcrumb = computed(() => {
+          const l1 = navLevel1.find(i=>i.key===state.l1)?.label || ''
+          const l2 = (l1Config.value.tabs2||[]).find(i=>i.key===state.l2)?.label || ''
+          const l3 = (l2Config.value?.tabs3||[]).find(i=>i.key===state.l3)?.label || ''
+          const l4 = (l3Menu.value||[]).find(i=>i.key===state.l4)?.label || ''
+          return [l1,l2,l3,l4].filter(Boolean).join(' / ')
+        })
+
+        // 视图切换
+        const viewTab = ref('asset')
+        const compareLabel = computed(() => ({'d-1':'较上日','m-1':'较上月','y-1':'较上年'}[filters.comparePoint]))
+
+        // 示例 KPI & 切片数据
+        const kpis = reactive({ onBalance: 12345678.23, onBalanceDelta: 23456.78, nplRate: 0.013, nplRateDelta: 0.002, newNplRate: 0.004, newNplRateDelta: -0.0005 })
+        const orgSlice = ref([
+          { org: '省行营业部', onBalance: 4234567.12, overdueBalance: 23456.12, nplBalance: 56000.23, nplRate: 0.012 },
+          { org: '武汉分行', onBalance: 3234567.45, overdueBalance: 33456.87, nplBalance: 66000.90, nplRate: 0.016 },
+          { org: '宜昌分行', onBalance: 1867890.23, overdueBalance: 10456.11, nplBalance: 21000.55, nplRate: 0.011 }
+        ])
+        const overdueList = ref([
+          { name: '湖北某实业集团', balance: 1200000, days: 45, overduePrincipal: 300000, overdueInterest: 12000 },
+          { name: '武汉某科技公司', balance: 560000, days: 20, overduePrincipal: 80000, overdueInterest: 3500 },
+          { name: '宜昌某建材贸易', balance: 380000, days: 75, overduePrincipal: 150000, overdueInterest: 6200 }
+        ])
+
+        // Chart.js
+        let nplChart
+        const initChart = () => {
+          const ctx = document.getElementById('nplChart')
+          if (!ctx) return
+          if (nplChart) nplChart.destroy()
+          const labels = Array.from({length: 12}, (_,i)=>`M${i+1}`)
+          const base = 1.1
+          const data = labels.map((_,i)=> 1.2 + Math.sin(i/2)/10 + (i>6?0.08:0) )
+          nplChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [{
+                label: 'NPL Rate',
+                data,
+                borderColor: 'rgba(34,211,238,1)',
+                backgroundColor: 'rgba(34,211,238,.15)',
+                tension: .35, fill: true
+              }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              scales: {
+                y: { ticks: { callback: v => (v).toFixed(2)+'%' } }
+              },
+              plugins: { legend: { labels: { color: '#cbd5e1' } } }
+            }
+          })
+        }
+
+        // 简单动效
+        const assetPanel = ref(null)
+        const repayPanel = ref(null)
+        const playEnter = (el) => {
+          if (!el) return
+          gsap.fromTo(el, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .35, ease: 'power2.out' })
+        }
+
+        // 交互方法
+        const switchL1 = (k) => { state.l1 = k; // 默认二三级
+          const def2 = (tabsMap[k]?.tabs2||[])[0]?.key
+          state.l2 = def2 || null
+          const def3 = (tabsMap[k]?.tabs3?.[state.l2]||[])[0]?.key
+          state.l3 = def3 || null
+          state.l4 = (tabsMap[k]?.menu4?.[state.l3]||[])[0]?.key || null
+          viewTab.value = 'asset'
+          nextTickAnim()
+        }
+        const switchL2 = (k) => { state.l2 = k; const def3 = (tabsMap[state.l1]?.tabs3?.[k]||[])[0]?.key; state.l3 = def3||null; state.l4 = (tabsMap[state.l1]?.menu4?.[state.l3]||[])[0]?.key || null; viewTab.value='asset'; nextTickAnim() }
+        const switchL3 = (k) => { state.l3 = k; state.l4 = (tabsMap[state.l1]?.menu4?.[k]||[])[0]?.key || null; viewTab.value='asset'; nextTickAnim() }
+        const switchL4 = (k) => { state.l4 = k; nextTickAnim() }
+
+        const doQuery = () => { playEnter(assetPanel.value); playEnter(repayPanel.value); initChart() }
+        const doReset = () => { filters.statDate = new Date().toISOString().slice(0,10); filters.org2='org-001'; filters.org3='org-001-01'; filters.comparePoint='m-1'; doQuery() }
+        const fmtNum = (n) => new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(n)
+
+        const nextTickAnim = () => {
+          setTimeout(()=>{ playEnter(assetPanel.value); playEnter(repayPanel.value); initChart() }, 0)
+        }
+
+        // 初始
+        onMounted(() => { initChart(); nextTickAnim() })
+
+        return {
+          navLevel1, tabsMap, state, filters, orgs2, orgs3, showOrg3,
+          l1Config, l2Config, l3Menu, breadcrumb,
+          viewTab, compareLabel, kpis, orgSlice, overdueList,
+          assetPanel, repayPanel,
+          switchL1, switchL2, switchL3, switchL4, doQuery, doReset, fmtNum,
+          isImplemented
+        }
+      }
+    }).mount('#app')
+  </script>
+</body>
+</html>
